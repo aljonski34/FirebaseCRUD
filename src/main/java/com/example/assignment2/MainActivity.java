@@ -6,6 +6,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import android.annotation.SuppressLint;
 import android.app.DatePickerDialog;
 import android.app.TimePickerDialog;
 import android.content.DialogInterface;
@@ -55,13 +56,143 @@ public class MainActivity extends AppCompatActivity {
         recyclerView = findViewById(R.id.RView);
 
 
-        Readnotes();
+        databaseReference.addValueEventListener(new ValueEventListener() {
 
-
-        recyclerView.setOnClickListener(new View.OnClickListener() {
             @Override
-            public void onClick(View view) {
-                showDialog();
+            public void onDataChange(@NonNull DataSnapshot snapshot) {
+
+                ArrayList<Note> arrayList = new ArrayList<>();
+                for (DataSnapshot dataSnapshot : snapshot.getChildren()) {
+                    Note note = dataSnapshot.getValue(Note.class);
+                    Objects.requireNonNull(note).setKey(dataSnapshot.getKey());
+                    arrayList.add(note);
+
+                }
+                if (arrayList.isEmpty()) {
+
+                    recyclerView.setVisibility(View.GONE);
+                } else {
+
+
+                    recyclerView.setVisibility(View.VISIBLE);
+
+
+                }
+                recyclerView.setLayoutManager(new LinearLayoutManager(MainActivity.this));
+                Adapter adapter = new Adapter(MainActivity.this, arrayList);
+                recyclerView.setAdapter(adapter);
+
+                adapter.setOnitemClickListener(new Adapter.OnItemClickListener() {
+                    @Override
+                    public void onClick(Note note) {
+
+
+                        AlertDialog.Builder dialog = new AlertDialog.Builder(MainActivity.this);
+                        View view = LayoutInflater.from(MainActivity.this).inflate(R.layout.dialog,null);
+                        dialog.setView(view);
+
+
+
+
+                        TextView date,time;
+
+                        TextInputEditText title,notes;
+
+                        title = view.findViewById(R.id.ETtitle);
+                        notes = view.findViewById(R.id.ETNotes);
+                        date = view.findViewById(R.id.setDate);
+                        time = view.findViewById(R.id.setTime);
+
+
+                        date.setOnClickListener(new View.OnClickListener() {
+
+                            Calendar calendar = Calendar.getInstance();
+
+
+                            @Override
+                            public void onClick(View view) {
+                                int years = calendar.get(Calendar.YEAR);
+                                int months = calendar.get(Calendar.MONTH);
+                                int  days  = calendar.get(Calendar.DAY_OF_MONTH);
+                                DatePickerDialog dialog1 = new DatePickerDialog(MainActivity.this, new DatePickerDialog.OnDateSetListener() {
+
+                                    @Override
+                                    public void onDateSet(DatePicker datePicker, int year, int month, int day) {
+                                                if(years < year || months < month || days < day){
+                                                    date.setText(year + "/" + (month + 1) + "/" +day );
+                                                }else{
+
+                                                    Toast.makeText(MainActivity.this, "NO You can set date in the past ", Toast.LENGTH_SHORT).show();
+
+                                                }
+                                    }
+                                },years,months,days);
+                                dialog1.show();
+
+                            
+
+                            }
+                        });
+
+                        title.setText(note.getTitle());
+                        notes.setText(note.getNote());
+                        date.setText(note.getDate());
+                        time.setText(note.getTime());
+                        time.setOnClickListener(new View.OnClickListener() {
+                            Calendar calendar = Calendar.getInstance();
+                            int hour = calendar.get(Calendar.HOUR_OF_DAY);
+                            int mins = calendar.get(Calendar.MINUTE);
+                            @Override
+                            public void onClick(View view) {
+
+                                TimePickerDialog timePickerDialog = new TimePickerDialog(MainActivity.this, new TimePickerDialog.OnTimeSetListener() {
+                                    @Override
+                                    public void onTimeSet(TimePicker timePicker, int hours, int min) {
+                                        time.setText(String.valueOf(hours) + ":"+ String.valueOf(min));
+                                    }
+                                },hour,mins,true);
+                                timePickerDialog.show();
+                            }
+                        });
+
+
+                        dialog.setPositiveButton("Edit", new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface dialogInterface, int i) {
+                                Note note1 = new Note();
+                                note1.setTitle(title.getText().toString());
+                                note1.setNote(notes.getText().toString());
+                                note1.setDate(date.getText().toString());
+                                note1.setTime(time.getText().toString());
+
+
+                                databaseReference.child(note.getKey()).setValue(note1);
+
+                            }
+                        });
+                        dialog.setNeutralButton("Close", new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface dialogInterface, int i) {
+                                dialogInterface.dismiss();
+                            }
+                        });
+                        dialog.setNegativeButton("Delete", new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface dialogInterface, int i) {
+                                    databaseReference.child(note.getKey()).removeValue();
+                            }
+                        });
+
+                        dialog.show();
+                    }
+                });
+
+            }
+
+
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {
+                Toast.makeText(MainActivity.this, "DATABASE ERROR ", Toast.LENGTH_SHORT).show();
             }
         });
 
@@ -110,12 +241,11 @@ public class MainActivity extends AppCompatActivity {
                 DatePickerDialog datePickerDialog = new DatePickerDialog(MainActivity.this, new DatePickerDialog.OnDateSetListener() {
                     @Override
                     public void onDateSet(DatePicker datePicker, int year, int month, int day) {
-                        if (years > year || months > month || days > day) {
-                            Toast.makeText(MainActivity.this, "Dont set a schedule to the past ", Toast.LENGTH_SHORT).show();
+                        if (years < year || months < month || days < day ) {
+                            date.setText(year + "/" + (month + 1) + "/" + day);
                         } else {
-                            date.setText(year + "/" + month + "/" + day);
+                            Toast.makeText(MainActivity.this, "You cant set date in the past ", Toast.LENGTH_SHORT).show();
                         }
-
 
                     }
                 }, years, months, days);
@@ -133,22 +263,18 @@ public class MainActivity extends AppCompatActivity {
                 int mins = calendar.get(Calendar.MINUTE);
 
                 TimePickerDialog timePickerDialog = new TimePickerDialog(MainActivity.this, new TimePickerDialog.OnTimeSetListener() {
+
                     @Override
                     public void onTimeSet(TimePicker timePicker, int hour, int min) {
 
-                        String AMPM;
-                        if (hour == 12) {
-                            AMPM = "PM";
-                        } else {
-                            AMPM = "AM";
-                        }
-                        int hourday = hours % 12;
-                        if (hourday == 12) {
-                            hour = 0;
-                        }
-                        time.setText(hour + ":" + min + AMPM);
+
+
+
+                        time.setText(String.valueOf(hour)+  ":" + String.valueOf(min));
+
+
                     }
-                }, hours, mins, false);
+                }, hours, mins, true);
                 timePickerDialog.show();
             }
         });
@@ -186,67 +312,6 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
-    private void Readnotes() {
-        databaseReference.addValueEventListener(new ValueEventListener() {
-
-            @Override
-            public void onDataChange(@NonNull DataSnapshot snapshot) {
-
-                ArrayList<Note> arrayList = new ArrayList<>();
-                for (DataSnapshot dataSnapshot : snapshot.getChildren()) {
-                    Note note = dataSnapshot.getValue(Note.class);
-                    Objects.requireNonNull(note).setKey(dataSnapshot.getKey());
-                    arrayList.add(note);
-
-                }
-                if (arrayList.isEmpty()) {
-
-                    recyclerView.setVisibility(View.GONE);
-                } else {
 
 
-                    recyclerView.setVisibility(View.VISIBLE);
-
-
-                }
-                recyclerView.setLayoutManager(new LinearLayoutManager(MainActivity.this));
-                Adapter adapter = new Adapter(MainActivity.this, arrayList);
-                recyclerView.setAdapter(adapter);
-
-            }
-
-
-            @Override
-            public void onCancelled(@NonNull DatabaseError error) {
-                Toast.makeText(MainActivity.this, "DATABASE ERROR ", Toast.LENGTH_SHORT).show();
-            }
-        });
-    }
-
-    private void showDialog() {
-
-
-
-        AlertDialog.Builder dialog = new AlertDialog.Builder(MainActivity.this);
-        CharSequence [] charSequence = {"Edit","Delete"};
-        View view = LayoutInflater.from(this).inflate(R.layout.dialog, null, false);
-
-        dialog.setView(view);
-
-        dialog.setItems(charSequence, new DialogInterface.OnClickListener() {
-            @Override
-            public void onClick(DialogInterface dialogInterface, int which) {
-
-            }
-        });
-        dialog.show();
-
-
-
-
-
-
-
-
-    }
 }
